@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEROSMART PRO V3.1 - Heartbeat Edition</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root { 
+            --bg-body: #0b101a;
+            --glass: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --accent-air: #ff5f6d;
+            --accent-water: #00c6ff;
+            --online: #00ffaa;
+            --offline: #ff4d4d;
+            --text: #ffffff;
+            --card-bg: rgba(0,0,0,0.2);
+        }
+        [data-theme="light"] {
+            --bg-body: #f0f2f5;
+            --glass: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --text: #1a1a1a;
+            --card-bg: rgba(255, 255, 255, 0.5);
+        }
+
+        body, html { 
+            min-height: 100%; 
+            margin: 0; 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg-body); 
+            color: var(--text); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            transition: background 0.5s ease;
+            overflow-x: hidden;
+        }
+        
+        .bg-blobs { position: fixed; width: 100%; height: 100%; z-index: -1; overflow: hidden; top:0; left:0; }
+        .blob { position: absolute; border-radius: 50%; filter: blur(100px); animation: move 20s infinite alternate; opacity: 0.3; }
+        .blob1 { width: 40vw; height: 40vw; background: var(--accent-air); top: -10%; left: -10%; }
+        .blob2 { width: 40vw; height: 40vw; background: var(--accent-water); bottom: -10%; right: -10%; }
+        @keyframes move { from { transform: translate(0,0); } to { transform: translate(50px, 50px); } }
+        
+        .dashboard { 
+            width: 95vw; 
+            max-width: 1100px; 
+            margin: 20px auto;
+            background: var(--glass); 
+            backdrop-filter: blur(30px); 
+            border: 1px solid var(--glass-border); 
+            border-radius: 40px; 
+            padding: 30px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr;
+            align-items: center; 
+            gap: 30px; 
+            box-shadow: 0 40px 100px rgba(0,0,0,0.2); 
+            box-sizing: border-box; 
+            position: relative; 
+            z-index: 10; 
+        }
+
+        @media (max-width: 850px) {
+            body { align-items: flex-start; }
+            .dashboard { 
+                grid-template-columns: 1fr;
+                margin: 60px 10px 20px 10px;
+                padding: 20px;
+                text-align: center;
+            }
+            .visual-panel { border-right: none !important; border-bottom: 1px solid var(--glass-border); padding-bottom: 20px; }
+            h1 { font-size: 1.5rem; }
+        }
+        
+        .visual-panel { display: flex; justify-content: center; align-items: center; height: 100%; border-right: 1px solid var(--glass-border); }
+        .hub { 
+            width: clamp(180px, 40vw, 300px); 
+            height: clamp(180px, 40vw, 300px); 
+            background: rgba(255,255,255,0.03); 
+            border-radius: 50%; 
+            border: 2px solid var(--glass-border); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+        }
+        
+        #fan-ui { height: 70%; width: 70%; filter: drop-shadow(0 0 20px var(--accent-air)); display: block; }
+        .spinning { animation: spin 0.2s linear infinite; }
+        @keyframes spin { from {transform: rotate(0deg);} to {transform: rotate(360deg);} }
+        
+        #water-ui { font-size: clamp(60px, 15vw, 100px); display: none; filter: drop-shadow(0 0 25px var(--accent-water)); }
+        .dripping { animation: drip 0.7s infinite ease-in; }
+        @keyframes drip { 0% { transform: translateY(-30%); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateY(40%); opacity: 0; } }
+        
+        .control-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+        .status-wrapper { display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--card-bg); padding: 8px 15px; border-radius: 50px; border: 1px solid var(--glass-border); font-size: 0.9rem; }
+        .led { width: 10px; height: 10px; border-radius: 50%; background: var(--offline); transition: 0.3s; }
+        .led.online { background: var(--online); box-shadow: 0 0 10px var(--online); }
+        
+        .btn-group { display: flex; gap: 10px; width: 100%; max-width: 400px; }
+        button { 
+            flex: 1; 
+            padding: 15px 5px;
+            border: 1px solid var(--glass-border); 
+            border-radius: 15px; 
+            background: rgba(255,255,255,0.05); 
+            color: var(--text); 
+            font-weight: 800; 
+            font-size: 0.95rem; 
+            cursor: pointer; 
+            transition: 0.3s; 
+        }
+        button.active { background: var(--text); color: var(--bg-body); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        
+        .dist-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 5px; }
+        .dist-val { font-size: clamp(40px, 10vw, 60px); font-weight: 900; line-height: 1; }
+        .unit { font-size: 18px; font-weight: 600; opacity: 0.7; }
+        .sensor-icon { font-size: 30px; }
+
+        .theme-toggle { 
+            position: absolute; 
+            top: 15px; 
+            right: 15px; 
+            background: var(--card-bg); 
+            border: 1px solid var(--glass-border); 
+            color: var(--text); 
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%; 
+            cursor: pointer; 
+            z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* ===================== SYSTÈME VOCAL ===================== */
+
+        /* Bouton micro principal */
+        .voice-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 50% !important;
+            border: 2px solid var(--glass-border) !important;
+            background: rgba(255,255,255,0.07) !important;
+            font-size: 1.6rem !important;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            flex: none !important;
+            padding: 0 !important;
+        }
+        .voice-btn:hover { background: rgba(255,255,255,0.15) !important; }
+        .voice-btn.listening {
+            background: rgba(255, 95, 109, 0.25) !important;
+            border-color: var(--accent-air) !important;
+            box-shadow: 0 0 0 0 rgba(255,95,109,0.5);
+            animation: pulse-ring 1.2s ease-out infinite;
+        }
+        @keyframes pulse-ring {
+            0%   { box-shadow: 0 0 0 0 rgba(255,95,109,0.6); }
+            70%  { box-shadow: 0 0 0 18px rgba(255,95,109,0); }
+            100% { box-shadow: 0 0 0 0 rgba(255,95,109,0); }
+        }
+
+        /* Bandeau de feedback vocal */
+        #voice-feedback {
+            width: 100%;
+            max-width: 400px;
+            min-height: 36px;
+            background: var(--card-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 8px 14px;
+            font-size: 0.82rem;
+            opacity: 0.85;
+            text-align: center;
+            box-sizing: border-box;
+            transition: all 0.3s;
+            display: none;
+        }
+        #voice-feedback.visible { display: block; }
+        #voice-feedback.success { border-color: var(--online); color: var(--online); }
+        #voice-feedback.error   { border-color: var(--offline); color: var(--offline); }
+        #voice-feedback.info    { border-color: var(--accent-water); color: var(--accent-water); }
+
+        /* Modal d'accueil vocal */
+        #voice-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.4s ease;
+        }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        .modal-box {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            padding: 40px 35px;
+            max-width: 420px;
+            width: 90vw;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+        }
+        .modal-box h2 { margin: 0; font-size: 1.5rem; letter-spacing: 1px; }
+        .modal-box p  { margin: 0; opacity: 0.8; font-size: 0.93rem; line-height: 1.6; }
+        .modal-icon   { font-size: 3rem; }
+        .modal-actions { display: flex; gap: 12px; width: 100%; margin-top: 8px; }
+        .modal-actions button {
+            flex: 1;
+            padding: 13px 8px;
+            border-radius: 14px;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-air), var(--accent-water)) !important;
+            border-color: transparent !important;
+            color: #fff !important;
+        }
+
+        /* Indicateur d'écoute flottant */
+        #listening-indicator {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,95,109,0.15);
+            border: 1px solid var(--accent-air);
+            border-radius: 50px;
+            padding: 10px 22px;
+            font-size: 0.88rem;
+            color: var(--accent-air);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            z-index: 500;
+            backdrop-filter: blur(12px);
+        }
+        #listening-indicator.show { display: flex; }
+        .mic-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--accent-air);
+            animation: blink 0.8s infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+    </style>
+</head>
+<body>
+    <div class="bg-blobs"><div class="blob blob1"></div><div class="blob blob2"></div></div>
+
+    <!-- ===== MODAL D'ACCUEIL VOCAL ===== -->
+    <div id="voice-modal">
+        <div class="modal-box">
+            <div class="modal-icon">🎙️</div>
+            <h2>AEROSMART PRO</h2>
+            <p>
+                Ce système vous permet de vous <strong>laver</strong> et <strong>sécher les mains</strong> automatiquement.<br><br>
+                Approchez les mains du capteur, puis choisissez le mode via les boutons ou par commande vocale.<br><br>
+                Dites <strong>"séchage"</strong> ou <strong>"lavage"</strong> pour changer de mode.
+            </p>
+            <div class="modal-actions">
+                <button onclick="closeModal(false)">Passer</button>
+                <button class="btn-primary" onclick="closeModal(true)">🔊 Lire l'intro</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== INDICATEUR D'ÉCOUTE ===== -->
+    <div id="listening-indicator">
+        <div class="mic-dot"></div>
+        <span>En écoute… dites "séchage" ou "lavage"</span>
+    </div>
+
+    <div class="dashboard">
+        <button class="theme-toggle" onclick="toggleTheme()" title="Changer de mode">🌓</button>
+        
+        <div class="visual-panel">
+            <div class="hub">
+                <svg id="fan-ui" viewBox="0 0 100 100">
+                    <g id="blades" style="transform-origin: 50px 50px;">
+                        <circle cx="50" cy="50" r="10" fill="currentColor"/>
+                        <path d="M50 50 C 70 10, 90 20, 50 0 C 10 20, 30 10, 50 50 Z" fill="currentColor" opacity="0.8"/>
+                        <path d="M50 50 C 70 10, 90 20, 50 0 C 10 20, 30 10, 50 50 Z" fill="currentColor" opacity="0.8" transform="rotate(120 50 50)"/>
+                        <path d="M50 50 C 70 10, 90 20, 50 0 C 10 20, 30 10, 50 50 Z" fill="currentColor" opacity="0.8" transform="rotate(240 50 50)"/>
+                    </g>
+                </svg>
+                <div id="water-ui">💧</div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <h1>AEROSMART PRO</h1>
+            <div class="status-wrapper">
+                <div id="led-indicator" class="led"></div>
+                <span id="status-text">ESP32 INITIALISATION...</span>
+            </div>
+            
+            <div class="btn-group">
+                <button id="btn-seche" onclick="setMode('seche')">Sèche-mains</button>
+                <button id="btn-lave"  onclick="setMode('lave')">Lave-mains</button>
+                <!-- Bouton micro -->
+                <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Commande vocale">🎙️</button>
+            </div>
+
+            <!-- Feedback vocal -->
+            <div id="voice-feedback"></div>
+
+            <div class="data-card" style="background: var(--card-bg); padding: 20px; border-radius: 25px; width: 100%; max-width: 350px; box-sizing: border-box;">
+                <small style="letter-spacing: 1px; opacity: 0.8; font-size: 0.7rem;">DISTANCE CAPTÉE</small>
+                <div class="dist-row">
+                    <span class="sensor-icon">📡</span>
+                    <span class="dist-val" id="cm">--</span>
+                    <span class="unit">cm</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  FIREBASE
+        // ============================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDjEPH40PHr60_KbHXXdnzIuecr_oVutgM",
+            authDomain: "aerosmartpro.firebaseapp.com",
+            databaseURL: "https://aerosmartpro-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "aerosmartpro",
+            storageBucket: "aerosmartpro.firebasestorage.app",
+            messagingSenderId: "444183558365",
+            appId: "1:444183558365:web:56af6eaa2b35cdf30a8334"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let currentMode = 'seche';
+        let lastHeartbeatValue = -1;
+        let lastUpdateTimestamp = 0;
+        let isOnline = false;
+
+        database.ref('heartbeat').on('value', (snapshot) => {
+            const val = snapshot.val();
+            if (val !== lastHeartbeatValue) {
+                lastHeartbeatValue = val;
+                lastUpdateTimestamp = Date.now();
+            }
+        });
+
+        setInterval(() => {
+            const led = document.getElementById('led-indicator');
+            const statusText = document.getElementById('status-text');
+            const now = Date.now();
+            if (now - lastUpdateTimestamp < 6000 && lastUpdateTimestamp !== 0) {
+                isOnline = true;
+                led.classList.add('online');
+            } else {
+                isOnline = false;
+                led.classList.remove('online');
+                statusText.innerText = "ESP32 HORS LIGNE";
+                document.getElementById('cm').innerText = "--";
+                document.getElementById('blades').classList.remove('spinning');
+                document.getElementById('water-ui').classList.remove('dripping');
+            }
+        }, 1000);
+
+        database.ref('distance').on('value', (snapshot) => {
+            const val = snapshot.val();
+            const displayElement = document.getElementById('cm');
+            if (val !== null && isOnline) {
+                displayElement.innerText = (val > 40 || val < 2) ? "--" : Math.round(val);
+                const isNear = (val < 26 && val > 2);
+                const blades = document.getElementById('blades');
+                const water = document.getElementById('water-ui');
+                const statusText = document.getElementById('status-text');
+                if (currentMode === 'seche') {
+                    if (isNear) { blades.classList.add('spinning');    statusText.innerText = "SÉCHAGE EN COURS"; }
+                    else        { blades.classList.remove('spinning'); statusText.innerText = "SÈCHE-MAINS PRÊT"; }
+                } else {
+                    if (isNear) { water.classList.add('dripping');    statusText.innerText = "LAVAGE EN COURS"; }
+                    else        { water.classList.remove('dripping'); statusText.innerText = "LAVE-MAINS PRÊT"; }
+                }
+            }
+        });
+
+        database.ref('mode').on('value', (snapshot) => {
+            const m = snapshot.val();
+            if (m) {
+                currentMode = m;
+                document.getElementById('btn-seche').className = (m === 'seche' ? 'active' : '');
+                document.getElementById('btn-lave').className  = (m === 'lave'  ? 'active' : '');
+                document.getElementById('fan-ui').style.display   = (m === 'seche') ? "block" : "none";
+                document.getElementById('water-ui').style.display = (m === 'lave')  ? "block" : "none";
+            }
+        });
+
+        function setMode(m) {
+            database.ref('/').update({ mode: m });
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            body.setAttribute('data-theme', body.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+        }
+
+        // ============================================================
+        //  SYSTÈME VOCAL – Text-to-Speech (TTS)
+        // ============================================================
+        function speak(text, onEnd) {
+            if (!window.speechSynthesis) return;
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'fr-FR';
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            if (onEnd) utter.onend = onEnd;
+            window.speechSynthesis.speak(utter);
+        }
+
+        const INTRO_TEXT =
+            "Bienvenue sur Aéro Smart Pro. " +
+            "Ce système vous permet de laver et de sécher vos mains automatiquement. " +
+            "Approchez simplement les mains du capteur. " +
+            "Choisissez le mode en appuyant sur les boutons, " +
+            "ou par commande vocale en disant : séchage, ou lavage.";
+
+        // ============================================================
+        //  MODAL D'ACCUEIL
+        // ============================================================
+        function closeModal(readIntro) {
+            document.getElementById('voice-modal').style.display = 'none';
+            if (readIntro) speak(INTRO_TEXT);
+        }
+
+        // ============================================================
+        //  RECONNAISSANCE VOCALE (STT)
+        // ============================================================
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isListening = false;
+
+        // Mots-clés reconnus (flexibles)
+        const KEYWORDS = {
+            seche: ['séchage', 'seche', 'sèche', 'sécher', 'sec', 'air', 'secher', 'sechage'],
+            lave:  ['lavage', 'lave', 'laver', 'eau', 'wash', 'lav']
+        };
+
+        function initRecognition() {
+            if (!SpeechRecognition) return null;
+            const r = new SpeechRecognition();
+            r.lang = 'fr-FR';
+            r.continuous = false;
+            r.interimResults = false;
+            r.maxAlternatives = 5;
+
+            r.onresult = (event) => {
+                const transcripts = Array.from(event.results[0])
+                    .map(alt => alt.transcript.toLowerCase().trim());
+                console.log('Transcrit:', transcripts);
+                processVoiceCommand(transcripts);
+            };
+
+            r.onerror = (event) => {
+                stopListening();
+                if (event.error === 'no-speech') {
+                    showFeedback('Aucune voix détectée. Réessayez.', 'error');
+                } else if (event.error === 'not-allowed') {
+                    showFeedback('Accès au microphone refusé.', 'error');
+                } else {
+                    showFeedback('Erreur : ' + event.error, 'error');
+                }
+            };
+
+            r.onend = () => { stopListening(); };
+            return r;
+        }
+
+        function processVoiceCommand(transcripts) {
+            for (const transcript of transcripts) {
+                for (const kw of KEYWORDS.seche) {
+                    if (transcript.includes(kw)) {
+                        setMode('seche');
+                        showFeedback('✅ Mode "Sèche-mains" activé !', 'success');
+                        speak('Mode séchage activé.');
+                        return;
+                    }
+                }
+                for (const kw of KEYWORDS.lave) {
+                    if (transcript.includes(kw)) {
+                        setMode('lave');
+                        showFeedback('✅ Mode "Lave-mains" activé !', 'success');
+                        speak('Mode lavage activé.');
+                        return;
+                    }
+                }
+            }
+            showFeedback('❓ Non reconnu : "' + transcripts[0] + '". Dites "séchage" ou "lavage".', 'error');
+        }
+
+        function toggleVoice() {
+            if (!SpeechRecognition) {
+                showFeedback('Reconnaissance vocale non supportée sur ce navigateur.', 'error');
+                return;
+            }
+            if (isListening) {
+                if (recognition) recognition.stop();
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            recognition = initRecognition();
+            if (!recognition) return;
+            try {
+                recognition.start();
+                isListening = true;
+                document.getElementById('voice-btn').classList.add('listening');
+                document.getElementById('voice-btn').innerText = '⏹️';
+                document.getElementById('listening-indicator').classList.add('show');
+                showFeedback('🎙️ Écoute… dites "séchage" ou "lavage"', 'info');
+            } catch(e) {
+                showFeedback('Impossible de démarrer le micro.', 'error');
+            }
+        }
+
+        function stopListening() {
+            isListening = false;
+            document.getElementById('voice-btn').classList.remove('listening');
+            document.getElementById('voice-btn').innerText = '🎙️';
+            document.getElementById('listening-indicator').classList.remove('show');
+        }
+
+        function showFeedback(msg, type) {
+            const el = document.getElementById('voice-feedback');
+            el.textContent = msg;
+            el.className = 'visible ' + type;
+            clearTimeout(el._timer);
+            el._timer = setTimeout(() => { el.className = ''; }, 4000);
+        }
+    </script>
+</body>
+</html>
