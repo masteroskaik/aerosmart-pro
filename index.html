@@ -6,6 +6,15 @@
     <title>AQUAFLOW PRO</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff5f6d'/><stop offset='100%25' stop-color='%2300c6ff'/></linearGradient></defs><circle cx='50' cy='50' r='50' fill='url(%23g)'/><text y='.9em' font-size='60' x='10'>🤲</text></svg>">
     
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00c6ff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AquaFlow Pro">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
@@ -562,6 +571,17 @@
             el.className = 'visible ' + type;
             clearTimeout(el._timer);
             el._timer = setTimeout(() => { el.className = ''; }, 4000);
+        }
+    </script>
+
+    <script>
+        // Enregistrement du Service Worker (PWA)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/aerosmart-pro/sw.js')
+                    .then(() => console.log('[PWA] Service Worker enregistré'))
+                    .catch((e) => console.log('[PWA] Erreur SW:', e));
+            });
         }
     </script>
 </body>
