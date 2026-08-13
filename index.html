@@ -406,13 +406,34 @@
         // ============================================================
         function speak(text, onEnd) {
             if (!window.speechSynthesis) return;
+
+            // On coupe immédiatement l'écoute pour que le micro n'entende pas
+            // l'appareil parler (évite l'effet d'écho qui fait "mal comprendre"
+            // la commande suivante).
+            pauseListening();
+
             window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(text);
             utter.lang = 'fr-FR';
             utter.rate = 1.0;
             utter.pitch = 1.0;
-            if (onEnd) utter.onend = onEnd;
+            utter.onend = () => {
+                isSpeaking = false;
+                if (onEnd) onEnd();
+                // On ne relance l'écoute qu'une fois la phrase totalement terminée,
+                // avec un petit délai pour laisser l'écho s'éteindre.
+                if (voiceActive) setTimeout(startSession, 450);
+            };
+            isSpeaking = true;
             window.speechSynthesis.speak(utter);
+        }
+
+        // Coupe proprement toute session de reconnaissance en cours,
+        // sans désactiver l'écoute vocale globale (voiceActive reste inchangé).
+        function pauseListening() {
+            clearTimeout(restartTimer);
+            try { if (recognition) recognition.stop(); } catch (e) {}
+            isListening = false;
         }
 
         const INTRO_TEXT =
@@ -441,6 +462,7 @@
         let recognition = null;
         let voiceActive = false;   // écoute globalement active
         let isListening = false;   // session micro en cours
+        let isSpeaking = false;    // l'appareil est en train de parler (TTS)
         let restartTimer = null;   // timer relance auto
         let cooldown = false;      // anti-doublon après commande
 
@@ -493,7 +515,7 @@
 
         // Démarre une session d'écoute
         function startSession() {
-            if (!SpeechRecognition || !voiceActive || isListening) return;
+            if (!SpeechRecognition || !voiceActive || isListening || isSpeaking) return;
             recognition = new SpeechRecognition();
             recognition.lang = 'fr-FR';
             recognition.continuous = false;
@@ -517,7 +539,9 @@
 
             recognition.onend = () => {
                 isListening = false;
-                if (voiceActive) scheduleRestart(); // relance automatique
+                // Si on est en train de parler, c'est speak() qui relancera
+                // l'écoute à la fin du discours — pas de relance aveugle ici.
+                if (voiceActive && !isSpeaking) scheduleRestart();
             };
 
             try { recognition.start(); isListening = true; }
