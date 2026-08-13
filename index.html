@@ -415,14 +415,14 @@
             window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(text);
             utter.lang = 'fr-FR';
-            utter.rate = 1.0;
+            utter.rate = 1.15;
             utter.pitch = 1.0;
             utter.onend = () => {
                 isSpeaking = false;
                 if (onEnd) onEnd();
                 // On ne relance l'écoute qu'une fois la phrase totalement terminée,
                 // avec un petit délai pour laisser l'écho s'éteindre.
-                if (voiceActive) setTimeout(startSession, 450);
+                if (voiceActive) setTimeout(startSession, 300);
             };
             isSpeaking = true;
             window.speechSynthesis.speak(utter);
@@ -505,11 +505,11 @@
             if (mode === 'seche') {
                 setMode('seche');
                 showFeedback('✅ Sèche-mains activé', 'success');
-                speak('Mode séchage activé.');
+                speak('Séchage activé.');
             } else {
                 setMode('lave');
                 showFeedback('✅ Lave-mains activé', 'success');
-                speak('Mode lavage activé.');
+                speak('Lavage activé.');
             }
         }
 
@@ -519,7 +519,7 @@
             recognition = new SpeechRecognition();
             recognition.lang = 'fr-FR';
             recognition.continuous = false;
-            recognition.interimResults = false;
+            recognition.interimResults = true;  // réagir dès que le mot est détecté, pas seulement en fin de phrase
             recognition.maxAlternatives = 6;
 
             recognition.onresult = (e) => {
@@ -550,7 +550,7 @@
 
         function scheduleRestart() {
             clearTimeout(restartTimer);
-            restartTimer = setTimeout(startSession, 300);
+            restartTimer = setTimeout(startSession, 120);
         }
 
         // Bouton micro : activer / désactiver
